@@ -75,13 +75,20 @@ function isTaggedToolSystemMessage(msg: Message): boolean {
  * them when `includeSystem=false`, we expand coverage backwards: every run of
  * consecutive system messages that terminates in a tagged message is considered
  * a single tool-result block.
+ *
+ * We walk backward from each tagged tool message and include consecutive system
+ * messages, stopping when we hit a non-system message (which separates different
+ * message blocks and ensures we don't accidentally include unrelated system prompts
+ * from earlier in the conversation).
  */
 function buildToolSystemSet(messages: Message[]): Set<number> {
   const result = new Set<number>();
   for (let i = 0; i < messages.length; i++) {
     if (isTaggedToolSystemMessage(messages[i])) {
       result.add(i);
-      // Walk backwards over adjacent system messages (intermediate results)
+      // Walk backwards over adjacent system messages that are part of the tool output block
+      // The walk stops naturally when we encounter a non-system message, which prevents
+      // accidentally including unrelated system messages from earlier in the conversation
       for (let j = i - 1; j >= 0 && messages[j].role === 'system'; j--) {
         result.add(j);
       }

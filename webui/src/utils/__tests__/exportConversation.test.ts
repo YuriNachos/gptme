@@ -335,6 +335,21 @@ describe('formatConversationAsMarkdown', () => {
       expect(result).toContain('```javascript');
       expect(result).toContain('console.log');
     });
+
+    it('strips py (ipython alias) tool-call codeblocks when includeTools is false', () => {
+      const messages: Message[] = [
+        { role: 'user', content: 'run some python' },
+        {
+          role: 'assistant',
+          content: "I'll execute this for you.\n\n```py\nprint('hello')\n```\n\nDone.",
+        },
+      ];
+      const result = formatConversationAsMarkdown('Chat', messages, { includeTools: false });
+      expect(result).not.toContain('```py');
+      expect(result).not.toContain("print('hello')");
+      expect(result).toContain("I'll execute this for you.");
+      expect(result).toContain('Done.');
+    });
   });
 });
 

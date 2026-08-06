@@ -10,6 +10,7 @@ export const GPTME_TOOL_ALLOWLIST = new Set([
   'tmux',
   'ipython',
   'python',
+  'py', // alias for ipython
   'save',
   'append',
   'patch',
