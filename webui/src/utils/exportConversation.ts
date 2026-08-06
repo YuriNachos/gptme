@@ -31,32 +31,66 @@ function stripThinkingBlocks(content: string): string {
     .trim();
 }
 
+/**
+ * Returns true if a message is a directly-tagged tool system message —
+ * either via metadata.tool or a recognisable content pattern.
+ */
+function isTaggedToolSystemMessage(msg: Message): boolean {
+  return (
+    msg.role === 'system' &&
+    (!!msg.metadata?.tool ||
+      (!!msg.content &&
+        (msg.content.includes('[Tool:') ||
+          msg.content.includes('```tool') ||
+          msg.content.includes('<tool'))))
+  );
+}
+
+/**
+ * Build the set of indices that represent tool-related system messages.
+ *
+ * Tools can emit multiple consecutive system-role messages per invocation;
+ * only the final (or last) one typically carries `metadata.tool`. Intermediate
+ * outputs (e.g. shellcheck diagnostics, partial stdout) appear immediately
+ * before the tagged message without any tool marker. To avoid silently dropping
+ * them when `includeSystem=false`, we expand coverage backwards: every run of
+ * consecutive system messages that terminates in a tagged message is considered
+ * a single tool-result block.
+ */
+function buildToolSystemSet(messages: Message[]): Set<number> {
+  const result = new Set<number>();
+  for (let i = 0; i < messages.length; i++) {
+    if (isTaggedToolSystemMessage(messages[i])) {
+      result.add(i);
+      // Walk backwards over adjacent system messages (intermediate results)
+      for (let j = i - 1; j >= 0 && messages[j].role === 'system'; j--) {
+        result.add(j);
+      }
+    }
+  }
+  return result;
+}
+
 export function getExportableMessages(
   messages: Message[],
   options?: Pick<ExportMarkdownOptions, 'includeSystem' | 'includeTools'>
 ): Message[] {
   const { includeSystem = false, includeTools = true } = options ?? {};
-  return messages.filter((msg) => {
+
+  // Pre-compute which system-message indices belong to tool runs, including
+  // intermediate messages that lack metadata.tool.
+  const toolSystemSet = buildToolSystemSet(messages);
+
+  return messages.filter((msg, i) => {
     if (msg.hide) return false;
 
-    // Check if this is a tool-related system message.
-    // Server tool results arrive as system-role messages with metadata.tool set;
-    // the content-pattern fallback catches legacy / non-server formats.
-    const isToolSystemMessage =
-      msg.role === 'system' &&
-      (!!msg.metadata?.tool ||
-        (msg.content &&
-          (msg.content.includes('[Tool:') ||
-            msg.content.includes('```tool') ||
-            msg.content.includes('<tool'))));
+    const isToolMsg = msg.role === 'tool' || msg.role === 'tool_result' || toolSystemSet.has(i);
 
-    // Filter tool-related messages (tool, tool_result, and tool-metadata system messages)
-    if (!includeTools) {
-      if (msg.role === 'tool' || msg.role === 'tool_result' || isToolSystemMessage) return false;
-    }
+    // Filter tool-related messages when tools are excluded
+    if (!includeTools && isToolMsg) return false;
 
-    // Filter regular system messages (those not containing tool metadata)
-    if (!includeSystem && msg.role === 'system' && !isToolSystemMessage) return false;
+    // Filter regular system messages (those not part of a tool run)
+    if (!includeSystem && msg.role === 'system' && !toolSystemSet.has(i)) return false;
 
     return true;
   });

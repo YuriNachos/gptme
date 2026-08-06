@@ -118,6 +118,50 @@ describe('getExportableMessages', () => {
     expect(result).toHaveLength(2);
     expect(result.every((msg) => msg.role !== 'system')).toBe(true);
   });
+
+  it('includes intermediate tool system messages (without metadata.tool) when includeTools is true', () => {
+    // Multi-output tools emit several system messages; only the final has metadata.tool.
+    // All of them must be included when tools are enabled.
+    const messages: Message[] = [
+      { role: 'user', content: 'run shellcheck' },
+      { role: 'assistant', content: '```bash\nshellcheck script.sh\n```' },
+      { role: 'system', content: 'SC2034: foo is unused.' }, // intermediate — no metadata
+      { role: 'system', content: 'exit 0', metadata: { tool: 'bash' } }, // final, tagged
+    ];
+    const result = getExportableMessages(messages, { includeTools: true, includeSystem: false });
+    expect(result).toHaveLength(4);
+    const systemMessages = result.filter((msg) => msg.role === 'system');
+    expect(systemMessages).toHaveLength(2);
+  });
+
+  it('excludes intermediate tool system messages when includeTools is false', () => {
+    const messages: Message[] = [
+      { role: 'user', content: 'run shellcheck' },
+      { role: 'assistant', content: '```bash\nshellcheck script.sh\n```' },
+      { role: 'system', content: 'SC2034: foo is unused.' }, // intermediate
+      { role: 'system', content: 'exit 0', metadata: { tool: 'bash' } }, // final
+    ];
+    const result = getExportableMessages(messages, { includeTools: false, includeSystem: false });
+    expect(result).toHaveLength(2);
+    expect(result.every((msg) => msg.role !== 'system')).toBe(true);
+  });
+
+  it('does not treat a leading system prompt as a tool result when followed by tool output', () => {
+    // A system prompt at position 0 must never be swept into the tool-system block.
+    const messages: Message[] = [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'run ls' },
+      { role: 'assistant', content: '```bash\nls\n```' },
+      { role: 'system', content: 'file1.txt', metadata: { tool: 'bash' } },
+    ];
+    // With includeTools=true and includeSystem=false, only the tool system message should appear
+    const result = getExportableMessages(messages, { includeTools: true, includeSystem: false });
+    // The leading system prompt must be excluded; only user, assistant, and tool system msg included
+    expect(result).toHaveLength(3);
+    const systemMessages = result.filter((msg) => msg.role === 'system');
+    expect(systemMessages).toHaveLength(1);
+    expect(systemMessages[0].metadata?.tool).toBe('bash');
+  });
 });
 
 describe('formatConversationAsMarkdown', () => {
