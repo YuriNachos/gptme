@@ -39,13 +39,16 @@ export function getExportableMessages(
   return messages.filter((msg) => {
     if (msg.hide) return false;
 
-    // Check if this is a tool-metadata system message
+    // Check if this is a tool-related system message.
+    // Server tool results arrive as system-role messages with metadata.tool set;
+    // the content-pattern fallback catches legacy / non-server formats.
     const isToolSystemMessage =
       msg.role === 'system' &&
-      msg.content &&
-      (msg.content.includes('[Tool:') ||
-        msg.content.includes('```tool') ||
-        msg.content.includes('<tool'));
+      (!!msg.metadata?.tool ||
+        (msg.content &&
+          (msg.content.includes('[Tool:') ||
+            msg.content.includes('```tool') ||
+            msg.content.includes('<tool'))));
 
     // Filter tool-related messages (tool, tool_result, and tool-metadata system messages)
     if (!includeTools) {

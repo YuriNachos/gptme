@@ -95,6 +95,29 @@ describe('getExportableMessages', () => {
     const result = getExportableMessages(messages);
     expect(result.some((msg) => msg.role === 'tool_result')).toBe(true);
   });
+
+  it('includes server tool results (system role + metadata.tool) when includeTools is true', () => {
+    // Real gptme server stores tool results as system messages with metadata.tool set
+    const messages: Message[] = [
+      { role: 'user', content: 'run ls' },
+      { role: 'assistant', content: '```bash\nls\n```' },
+      { role: 'system', content: 'file1.txt\nfile2.txt', metadata: { tool: 'bash' } },
+    ];
+    const result = getExportableMessages(messages, { includeTools: true, includeSystem: false });
+    expect(result).toHaveLength(3);
+    expect(result.some((msg) => msg.role === 'system')).toBe(true);
+  });
+
+  it('excludes server tool results (system role + metadata.tool) when includeTools is false', () => {
+    const messages: Message[] = [
+      { role: 'user', content: 'run ls' },
+      { role: 'assistant', content: '```bash\nls\n```' },
+      { role: 'system', content: 'file1.txt\nfile2.txt', metadata: { tool: 'bash' } },
+    ];
+    const result = getExportableMessages(messages, { includeTools: false, includeSystem: false });
+    expect(result).toHaveLength(2);
+    expect(result.every((msg) => msg.role !== 'system')).toBe(true);
+  });
 });
 
 describe('formatConversationAsMarkdown', () => {

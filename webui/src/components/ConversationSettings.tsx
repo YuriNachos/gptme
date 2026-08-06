@@ -27,6 +27,7 @@ import { EnvironmentVariables } from './settings/EnvironmentVariables';
 import { ToolsConfiguration } from './settings/ToolsConfiguration';
 import { McpConfiguration } from './settings/McpConfiguration';
 import { useConversationSettings } from '@/hooks/useConversationSettings';
+import { useApi } from '@/contexts/ApiContext';
 import { demoConversations } from '@/democonversations';
 import { SessionCostSummary } from './SessionCostSummary';
 
@@ -111,7 +112,8 @@ export const ConversationSettings: FC<ConversationSettingsProps> = ({ conversati
   // Export detail-level options
   const [includeThinking, setIncludeThinking] = useState(false);
   const [includeTools, setIncludeTools] = useState(true);
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [copyState, setCopyState] = useState<'idle' | 'loading' | 'copied' | 'error'>('idle');
+  const { api } = useApi();
   const {
     form,
     toolFields,
@@ -460,6 +462,7 @@ export const ConversationSettings: FC<ConversationSettingsProps> = ({ conversati
                     type="button"
                     variant="outline"
                     size="sm"
+                    disabled={copyState === 'loading'}
                     onClick={async () => {
                       const conv = conversations$.get(conversationId)?.get();
                       if (!conv?.data?.log?.length) {
@@ -467,16 +470,25 @@ export const ConversationSettings: FC<ConversationSettingsProps> = ({ conversati
                         return;
                       }
 
-                      // Check if all messages are loaded (conversationState.hasMoreBefore indicates if there are earlier messages not yet loaded)
+                      let messagesToExport = conv.data
+                        .log as import('@/types/conversation').Message[];
+
+                      // If older messages haven't been loaded yet, fetch the full log from the server
                       const conversationState = conversations$.get(conversationId);
                       if (conversationState?.hasMoreBefore?.get?.()) {
-                        toast.error(
-                          'Not all messages are loaded. Scroll up to load earlier messages before copying.'
-                        );
-                        return;
+                        setCopyState('loading');
+                        try {
+                          const fullConv = await api.getConversation(conversationId);
+                          messagesToExport = fullConv.log;
+                        } catch {
+                          setCopyState('error');
+                          toast.error('Failed to load all messages — try scrolling up first');
+                          setTimeout(() => setCopyState('idle'), 2000);
+                          return;
+                        }
                       }
 
-                      const exportableMessages = getExportableMessages(conv.data.log, {
+                      const exportableMessages = getExportableMessages(messagesToExport, {
                         includeTools,
                       });
                       if (!exportableMessages.length) {
@@ -501,10 +513,16 @@ export const ConversationSettings: FC<ConversationSettingsProps> = ({ conversati
                   >
                     {copyState === 'copied' ? (
                       <Check className="mr-2 h-4 w-4 text-green-600" />
+                    ) : copyState === 'loading' ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <Clipboard className="mr-2 h-4 w-4" />
                     )}
-                    {copyState === 'copied' ? 'Copied!' : 'Copy'}
+                    {copyState === 'copied'
+                      ? 'Copied!'
+                      : copyState === 'loading'
+                        ? 'Loading…'
+                        : 'Copy'}
                   </Button>
 
                   {/* Download as Markdown */}
