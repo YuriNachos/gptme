@@ -14,6 +14,7 @@ export const GPTME_TOOL_ALLOWLIST = new Set([
   'save',
   'append',
   'patch',
+  'patch_many',
   'morph',
   'read',
   'browser',
@@ -23,6 +24,18 @@ export const GPTME_TOOL_ALLOWLIST = new Set([
   'think',
   'ask',
   'subagent',
+  // Additional built-in tools
+  'todo',
+  'form',
+  'complete',
+  'clarify',
+  'elicit',
+  'choice',
+  'chats',
+  'vent',
+  'computer',
+  'autocommit',
+  'screenshot',
 ]);
 
 export function isKnownTool(name: string): boolean {

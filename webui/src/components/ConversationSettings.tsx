@@ -473,7 +473,10 @@ export const ConversationSettings: FC<ConversationSettingsProps> = ({ conversati
                       let messagesToExport = conv.data
                         .log as import('@/types/conversation').Message[];
 
-                      // If older messages haven't been loaded yet, fetch the full log from the server
+                      // If older messages haven't been loaded yet, fetch the full log from the server.
+                      // TODO: In multi-server setups, use the conversation's owning server client
+                      // instead of api (the active/primary client). ConversationState would need a
+                      // serverId field populated from the ConversationSummary for this to work.
                       const conversationState = conversations$.get(conversationId);
                       if (conversationState?.hasMoreBefore?.get?.()) {
                         setCopyState('loading');
