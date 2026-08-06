@@ -300,6 +300,41 @@ describe('formatConversationAsMarkdown', () => {
       expect(result).not.toContain('file.txt');
       expect(result).toContain('## Assistant');
     });
+
+    const messagesWithEmbeddedToolCall: Message[] = [
+      { role: 'user', content: 'list files' },
+      {
+        role: 'assistant',
+        content: "Sure, I'll list the files.\n\n```shell\nls\n```\n\nDone.",
+      },
+    ];
+
+    it('strips tool-call codeblocks embedded in assistant messages when includeTools is false', () => {
+      const result = formatConversationAsMarkdown('Chat', messagesWithEmbeddedToolCall, {
+        includeTools: false,
+      });
+      expect(result).not.toContain('```shell');
+      expect(result).not.toContain('ls');
+      expect(result).toContain("Sure, I'll list the files.");
+      expect(result).toContain('Done.');
+    });
+
+    it('keeps tool-call codeblocks embedded in assistant messages by default', () => {
+      const result = formatConversationAsMarkdown('Chat', messagesWithEmbeddedToolCall);
+      expect(result).toContain('```shell\nls\n```');
+    });
+
+    it('does not strip non-tool language-tagged codeblocks from assistant messages', () => {
+      const messages: Message[] = [
+        {
+          role: 'assistant',
+          content: 'Here is an example:\n\n```javascript\nconsole.log("hi")\n```',
+        },
+      ];
+      const result = formatConversationAsMarkdown('Chat', messages, { includeTools: false });
+      expect(result).toContain('```javascript');
+      expect(result).toContain('console.log');
+    });
   });
 });
 

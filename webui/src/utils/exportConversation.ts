@@ -1,4 +1,5 @@
 import type { Message } from '@/types/conversation';
+import { isKnownTool } from './toolCallParser';
 
 export interface ExportMarkdownOptions {
   includeSystem?: boolean;
@@ -28,6 +29,24 @@ function stripThinkingBlocks(content: string): string {
   return content
     .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/g, '')
     .replace(/^\n+/, '')
+    .trim();
+}
+
+/**
+ * Strip fenced tool-call codeblocks (e.g. ```shell, ```patch) from assistant
+ * message content. gptme tool invocations are embedded directly in the
+ * assistant's message body as ```<tool-name>\n...\n``` fences rather than a
+ * separate structured field, so excluding "tool details" has to strip these
+ * blocks too — otherwise the invocation survives even with includeTools=false.
+ * Uses the same tool-name allowlist as toolCallParser so detection stays
+ * consistent with how the chat UI renders these blocks as rich tool calls.
+ */
+function stripToolCallBlocks(content: string): string {
+  return content
+    .replace(/```(\w+)(?:\s+[^\n]*)?\n[\s\S]*?```/g, (match, tool: string) =>
+      isKnownTool(tool) ? '' : match
+    )
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -127,8 +146,11 @@ export function formatConversationAsMarkdown(
     }
     lines.push(header, '');
 
-    const content =
-      !includeThinking && msg.role === 'assistant' ? stripThinkingBlocks(msg.content) : msg.content;
+    let content = msg.content;
+    if (msg.role === 'assistant') {
+      if (!includeThinking) content = stripThinkingBlocks(content);
+      if (!includeTools) content = stripToolCallBlocks(content);
+    }
 
     lines.push(content, '');
   }
